@@ -15,7 +15,7 @@ Through research and analysis of technological trends in this field, this paper 
 
 # Part One: Development Guide—Efficient GPU Inference Based on Serverless Computing
 
-## Motivation & Background
+## 1. Motivation & Background
 
 **Advanced Serverless Computing platforms** typically provide users with convenient one-stop development and deployment capabilities for operators and workflows, flexible workflow/dynamic DAG orchestration and execution capabilities, fine-grained fault recovery, heterogeneous resource task scheduling and management capabilities, massive offline task processing capabilities, and underlying Serverless computing capabilities, making the architecture naturally suited for Serverless Inference scenarios.
 
@@ -35,7 +35,7 @@ Traditional development patterns usually treat model inference as a synchronous 
 
    1. Next-generation Serverless Computing inference architecture design based on CXL
 
-## Core Component Introduction
+## 2. Core Component Introduction
 
 ### 2.1 Traditional Frameworks: PyTorch & TensorFlow
 
@@ -54,7 +54,7 @@ To address efficiency issues during the serving phase, specialized inference fra
   - **Core Advantage**: Building on **PagedAttention**, it automatically manages **KV Cache matching and recycling** through **RadixTree**, achieving ultimate inference acceleration for complex structured output (JSON) and multi-turn dialogue (Prefix Caching) scenarios.
 - **Comparison**: Compared to PyTorch/TF, vLLM and SGLang can provide 2-10x throughput improvement on the same hardware. vLLM has a more mature ecosystem, while SGLang is faster in specific scenarios (such as automatic long context reuse).
 
-## Why Use vLLM?
+## 3. Why Use vLLM?
 
 Understanding vLLM's mechanism is a prerequisite for writing high-performance GPU inference operators.
 
@@ -94,18 +94,19 @@ Note that requests subjected to CPU swapping will introduce noticeable latency, 
 
 From this, we can understand that compared to traditional inference frameworks, vLLM's core advantage lies in thoroughly solving the memory fragmentation problem through PagedAttention, combined with Iteration-level Scheduling to achieve a leap from "static batching" to "dynamic/iteration-level batching." This not only eliminates the Head-of-line Blocking problem, ensuring full utilization of GPU computing power, but also provides excellent system robustness and inference throughput in complex long-text and high-concurrency scenarios.
 
-## Core Optimization: Traditional "Single Request-Single Model" Mode
+## 4. Core Optimization: Traditional "Single Request-Single Model" Mode
 
 **First, let's explain two terms**
 
 > **One-sentence explanation of what is Serverless Computing operator resource exclusive reuse?**
-
 > The Serverless Computing platform operator's underlying runtime uses Lambda. In traditional Serverless computing, resources are released when the operator exits. Operator container exclusive reuse can be understood as transforming a stateless function computation into a stateful server, allowing the operator to pre-load global Python modules in the container before running, running the operator Handler through thread or fork process during runtime, and not exiting the container after running, caching global modules for reuse by the next invocation. After enabling operator exclusive reuse, only the same type of operator can run within a single host machine to avoid memory leak issues.
 
 > **One-sentence explanation of what is operator handler Runtime mode?**
 > As mentioned above, after enabling exclusive reuse, the operator runs the operator Handler through thread or fork process during runtime, where thread mode allows creating and modifying global Python modules within the handler. The process method can only load global modules through Copy On Write within the handler and cannot modify global modules.
 
 **The following is an example of an operator with resource exclusive reuse enabled using thread Handler Runtime mode**
+
+![](images/img_1.png)
 
 In summary, after enabling the platform's operator resource exclusive reuse capability, combined with the operator handler Thread / Process Runtime mode, model parameter memory can be pre-loaded globally, containers remain resident on the host machine, and each subsequent new request can reuse the global model memory for direct inference. In Serverless Inference Computing scenarios, this avoids the time-consuming process of repeatedly loading models during cold starts.
 
@@ -122,10 +123,11 @@ In summary, after enabling the platform's operator resource exclusive reuse capa
 
 ### 4.1 Best Practice: Concurrent Inference with Shared Model Memory
 
+![](images/img_2.png)
+
 To fully leverage vLLM's above features, **the platform's operator single-task multi-concurrency feature needs to be enabled (part 6)**.
 
 > **One-sentence explanation of what is operator single-task multi-concurrency?**
-
 > A container is no longer limited to running only one operator task, but can concurrently run multiple operator tasks in the form of processes/threads (each operator Handler Execution is considered a task)
 
 **Architecture Change:** No longer "one request exclusively occupies one model," but **"multiple request threads share the same asynchronous inference engine"**.
@@ -153,7 +155,9 @@ In high-concurrency scenarios, if vLLM still independently calculates and stores
 
   1. SGLang's **RadixAttention** takes this sharing to the extreme. In SGLang, this tree-like reuse is native and more deeply optimized.
 
-## Code Migration Guide
+## 5. Code Migration Guide
+
+![](images/img_3.png)
 
 ### 5.1 Old Code (Synchronous/Blocking - Needs Refactoring)
 
@@ -332,7 +336,7 @@ def get_engine():
   - If you want to run TP with 3 GPUs, it will most likely error because the Head count cannot be evenly divided.
 - **Operator needs to install Ray (pip install ray)**
 
-## Operator Single-Task Multi-Concurrency
+## 6. Operator Single-Task Multi-Concurrency
 
 1. **Platform Feature:** The platform supports concurrent invocation of operator Handlers, exposed to users through configuration
    **Note:** This configuration is strongly related to VLLM's `max_num_seqs` setting and can be understood as a soft rate limit. If operator concurrency is less than `max_num_seqs`, it will synchronously limit `max_num_seqs`.
@@ -348,7 +352,7 @@ Operator resources are set to 32 CPU cores, 128GB memory, 8 H20 GPUs.
 
 **Note: After the operator task loads, it will immediately occupy all 8 GPUs, 32 CPU cores and 128GB memory resources. 3 Handler threads share and compete for resources. This design is consistent with mainstream inference engines like VLLM / SGLang (inference engines hold all declared resources at once during loading, and different sequences in each batch compete for resources together)**
 
-## Configuration and Operations Notes
+## 7. Configuration and Operations Notes
 
 - **Executor Mode**: **Choose Thread Mode/Process Mode**
 - **Exclusive Container Reuse**: Operator enables **exclusive container reuse**
@@ -367,14 +371,17 @@ Operator resources are set to 32 CPU cores, 128GB memory, 8 H20 GPUs.
   - Set operator **single_task_multi_concurrency** = 5, operator processes maximum 5 requests concurrently (one can do video download/preprocessing while queuing).
 - **Other References**
 
-  - The following are experimental configurations from the original VLLM Paper. Different inference scenarios, such as pure text/multimodal/different models and prompt sizes will vary, for reference only
-    ![](static/Lr0ebzKLXonuVAxijHll5i3sgtf.png)
+  - The following are experimental configurations from the original VLLM Paper. Different inference scenarios, such as pure text/multimodal/different models and prompt sizes will vary, for reference only.
+    
+    ![](images/img_4.png)
 
-## Conclusion
+![](images/img_5.png)
+
+## 8. Conclusion
 
 In summary, following the above development specifications, using the same resource scale to perform inference on a large number of requests can significantly improve GPU utilization and reduce inference latency (through System Prompt Context reuse and concurrency improvement to reduce queuing time).
 
-## Future Optimization Space: Inference Engine Introduction, Affinity Scheduling, Load-Based Intelligent Scheduling
+## 9. Future Optimization Space: Inference Engine Introduction, Affinity Scheduling, Load-Based Intelligent Scheduling
 
 - **A/B Testing (vLLM vs SGLang)**:
 
@@ -393,7 +400,9 @@ In summary, following the above development specifications, using the same resou
   - **Solution: Cost-Based Load Balancing**. Future schedulers should parse the Prompt's Estimated Token Cost before routing.
     - **Strategy**: Adopt **"Least Loaded (by Tokens)"** strategy, scheduling ultra-long video requests to instances with sufficient memory, trying to keep each instance's **memory pressure** and **computational load** balanced, avoiding single-point Swapping.
 
-## Part One Summary and Outlook
+![](images/img_6.png)
+
+## 10. Part One Summary and Outlook
 
 Following the above development specifications, using the same resource scale to perform inference on a large number of requests can significantly improve GPU utilization and reduce inference latency (through System Prompt Context reuse and concurrency improvement to reduce queuing time).
 
@@ -421,7 +430,7 @@ CXL (Compute Express Link) technology is becoming the key technology for breakin
 
 # Part Two: Next-Generation Serverless Computing Platform Inference Architecture Based on CXL
 
-## Background: The Memory Crisis in AI Inference
+## 1. Background: The Memory Crisis in AI Inference
 
 ### 1.1 Memory Requirements of Next-Generation Ultra-Large Models
 
@@ -461,7 +470,7 @@ HBM (High Bandwidth Memory) is the mainstream memory solution for current AI acc
 
 CXL memory costs approximately 1/10 of HBM, and capacity can scale to cluster level. For scenarios like KV Cache that are capacity-sensitive but have relatively lower bandwidth requirements, CXL provides a viable expansion path.
 
-## CXL Technology Overview
+## 2. CXL Technology Overview
 
 ### 2.1 What is CXL?
 
@@ -469,7 +478,7 @@ Compute Express Link (CXL) is an open interconnect standard built on the PCIe ph
 
 The CXL Consortium was founded in 2019, with founding members including Alibaba, Meta, Google, Intel, Microsoft, and others [1].
 
-![](static/XeUQbftn0oxyROxUG63lEGJigth.png)
+![](images/img_7.png)
 
 ### 2.2 Three Sub-protocols of CXL
 
@@ -490,7 +499,7 @@ The CXL Consortium was founded in 2019, with founding members including Alibaba,
 - **Type 2** (CXL.io + CXL.cache + CXL.mem): GPUs, FPGAs, with local memory
 - **Type 3** (CXL.io + CXL.mem): Memory expansion devices, **AI inference scenarios mainly focus on this type**
 
-## CXL Technology Evolution
+## 3. CXL Technology Evolution
 
 ### 3.1 CXL 1.0/1.1 (2019)
 
@@ -582,6 +591,8 @@ Beluga is the first system to achieve GPU direct access to large-scale memory po
 
 **Limitation:** CXL 3.0 P2P products are still maturing. Currently Beluga and other systems achieve partial direct connection capability based on CXL 2.0 + software optimization. Complete hardware-level P2P support is expected in 2026-2027.
 
+![](images/img_8.png)
+
 ### 3.6 Version Comparison
 
 <table>
@@ -601,7 +612,7 @@ Beluga is the first system to achieve GPU direct access to large-scale memory po
 <td>Product Maturity<br/></td><td>Mass produced<br/></td><td>Mass produced<br/></td><td>2026-2027<br/></td><td>2027+<br/></td></tr>
 </table>
 
-## CXL Applications in AI Inference: Academic and Industry Frontiers
+## 4. CXL Applications in AI Inference: Academic and Industry Frontiers
 
 ### 4.1 Academic Research Progress
 
@@ -679,13 +690,17 @@ The CXL ecosystem is rapidly maturing:
 - Alibaba Cloud: PolarDB CXL production deployment
 - Other major cloud providers actively positioning
 
-## CXL Application Design in Serverless Computing Platform
+## 5. CXL Application Design in Serverless Computing Platform
 
 ### 5.1 System Architecture Design
 
 The next-generation inference architecture for Serverless Computing based on CXL can be divided into three layers:
 
+![](images/img_9.png)
+
 ### 5.2 KV Cache Tiered Storage Strategy
+
+![](images/img_10.png)
 
 **Data Flow Strategy**:
 
@@ -757,6 +772,8 @@ engine_args = AsyncEngineArgs(
 )
 ```
 
+![](images/img_11.png)
+
 ### 5.5 Expected Benefits Analysis
 
 Based on existing CXL practice data and research results in the industry, introducing CXL to the Serverless Computing platform is expected to achieve:
@@ -779,7 +796,7 @@ Based on existing CXL practice data and research results in the industry, introd
 - Memory utilization: Order-of-magnitude improvement
 - Elasticity: Memory capacity can be dynamically expanded
 
-## Summary and Outlook
+## 6. Summary and Outlook
 
 ### 6.1 Core Viewpoints
 
