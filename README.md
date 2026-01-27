@@ -749,26 +749,26 @@ Currently, given that CXL 3.0 is not yet fully deployed and no inference engine 
 
 ```python
 # This is imaginary, how VLLM might evolve in the future
-_# CXL-enhanced vLLM Engine configuration example_
+# CXL-enhanced vLLM Engine configuration example
 engine_args = AsyncEngineArgs(
-    model="/cxl-pool/models/llama-405b",  _# Model weights can be stored in CXL_
+    model="/cxl-pool/models/llama-405b",  # Model weights can be stored in CXL
     
-    _# GPU HBM configuration - only store active KV_
+    # GPU HBM configuration - only store active KV
     gpu_memory_utilization=0.85,
     max_num_seqs=16,
     
-    _# CXL KV Cache configuration_
-    enable_cxl_kv_cache=True,           _# Enable CXL KV Cache_
-    cxl_pool_size_gb=2048,              _# CXL Pool capacity_
-    cxl_kv_cache_ratio=0.8,             _# 80% for KV Cache_
+    # CXL KV Cache configuration
+    enable_cxl_kv_cache=True,           # Enable CXL KV Cache
+    cxl_pool_size_gb=2048,              # CXL Pool capacity
+    cxl_kv_cache_ratio=0.8,             # 80% for KV Cache
     
-    _# Prefix sharing configuration_
+    # Prefix sharing configuration
     enable_prefix_caching=True,
-    shared_prefix_pool="cxl://pool/prefix",  _# Cross-instance sharing_
+    shared_prefix_pool="cxl://pool/prefix",  # Cross-instance sharing
     
-    _# Tiering strategy_
+    # Tiering strategy
     kv_cache_eviction_policy="lru-tiered",
-    hot_cache_threshold_ms=100,          _# Access within 100ms considered hot_
+    hot_cache_threshold_ms=100,          # Access within 100ms considered hot
 )
 ```
 
