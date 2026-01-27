@@ -1,4 +1,4 @@
-# Serverless Computing GPU Inference Development Guide and Next-Generation Inference Architecture Based on CXL
+# Serverless GPU Inference: Dev Guide & Next-Gen CXL-Based Architecture
 
 # Preface: Evolution and Challenges of AI Inference Infrastructure in 2026
 
