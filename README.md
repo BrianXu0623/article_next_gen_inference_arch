@@ -6,9 +6,9 @@ With the rapid iteration of large models and their infrastructure, the field of 
 
 According to MarketsandMarkets projections, the AI inference market is expected to grow from $106.15 billion in 2025 to $254.9 billion in 2030, with a compound annual growth rate of 19.2% [8]. In this computing revolution, **memory is replacing computation as the new bottleneck**—GPU computing power growth far exceeds HBM memory bandwidth and capacity growth, creating an increasingly severe "Memory Wall" problem.
 
-Through research and analysis of technological trends in this field, this paper aims to facilitate the architectural evolution of the Serverless Computing platform, enabling it to effectively respond to technological changes and provide reference ideas for subsequent system optimization.
+Through research and analysis of technological trends in this field, this article aims to facilitate the architectural evolution of the Serverless Computing platform, enabling it to effectively respond to technological changes and provide reference ideas for subsequent system optimization.
 
-**This paper is divided into two parts:**
+**This Article is divided into two parts:**
 
 - **Part One**: Introduces how to leverage the advanced capabilities of the Serverless Computing platform, combined with inference engines such as vLLM/SGLang, to achieve optimal batch processing within a single instance, maximizing GPU utilization and reducing inference latency
 - **Part Two**: Introduces the design of next-generation Serverless Computing inference architecture based on CXL (Compute Express Link), preparing for the upcoming era of ultra-large models
@@ -25,7 +25,7 @@ However, when developing and deploying large model inference operators on the Se
 
 Traditional development patterns usually treat model inference as a synchronous function call. However, GPUs are highly parallelized hardware, and LMM inference has alternating characteristics of "compute-intensive" and "memory-intensive." If each Handler instance can only process one request serially, GPU computing power is largely wasted during I/O waiting or generation gaps, and it cannot handle burst traffic.
 
-**This paper is divided into two parts**
+**This article is divided into two parts**
 
 1. **The first part aims to introduce**
 
