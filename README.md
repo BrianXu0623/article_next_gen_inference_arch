@@ -8,7 +8,7 @@ According to MarketsandMarkets projections, the AI inference market is expected 
 
 Through research and analysis of technological trends in this field, this article aims to facilitate the architectural evolution of the Serverless Computing platform, enabling it to effectively respond to technological changes and provide reference ideas for subsequent system optimization.
 
-**This Article is divided into two parts:**
+**This article is divided into two parts:**
 
 - **Part One**: Introduces how to leverage the advanced capabilities of the Serverless Computing platform, combined with inference engines such as vLLM/SGLang, to achieve optimal batch processing within a single instance, maximizing GPU utilization and reducing inference latency
 - **Part Two**: Introduces the design of next-generation Serverless Computing inference architecture based on CXL (Compute Express Link), preparing for the upcoming era of ultra-large models
