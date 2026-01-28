@@ -742,35 +742,43 @@ Serverless Computing architecture has a natural fit with CXL memory pooling:
 
 **Integration Expectations**:
 
-Currently, given that CXL 3.0 is not yet fully deployed and no inference engine natively supports CXL, there is still academic research on CXL inference engines, and after CXL deployment, mainstream inference engines like VLLM/SGLang will likely provide support at the first opportunity.
+Currently, given that CXL 3.0 has not been fully deployed, mainstream inference engines do not yet natively support CXL, but academia has achieved substantial breakthroughs:
 
-> **TraCT: Disaggregated LLM Serving with CXL Shared Memory KV Cache at Rack-Scale (ASPLOS 2025)**
-> TraCT is a rack-scale LLM serving system that replaces RDMA-based KV transfer with direct GPU-CXL DMA, allowing prefill and decode workers to share KV blocks through CXL shared memory. The system is implemented on the Dynamo-vLLM runtime and evaluated on real CXL hardware [10]
+1. TraCT (ASPLOS 2025) [10]
+* Rack-scale LLM serving system
+* Replaces RDMA-based KV transmission with GPU-CXL DMA
+* Implemented based on Dynamo-vLLM runtime
+* Evaluated on real CXL hardware (Niagara)
 
-```python
-# This is imaginary, how VLLM might evolve in the future
-# CXL-enhanced vLLM Engine configuration example
+2. Beluga (arXiv 2025.11) - Actually Modified vLLM [11]
+* Developed by Alibaba team, integrated into vLLM inference engine
+* Built 8TB memory pool using XConn XC50256 CXL 2.0 commercial switch
+* Achieved 89.6% reduction in TTFT and 7.35x throughput improvement (compared to RDMA solutions)
+* Key innovation: Supports native CXL load/store access semantics for KV Cache, allowing GPUs and CPUs to directly access CXL shared memory
+
+Future Possible Support for vLLM/SGLang
+
+Given that Beluga has proven feasibility, mainstream inference engines like vLLM and SGLang will likely provide native support as soon as the CXL hardware ecosystem matures.
+```Python
+# Future possible vLLM CXL configuration
 engine_args = AsyncEngineArgs(
-    model="/cxl-pool/models/llama-405b",  # Model weights can be stored in CXL
-    
-    # GPU HBM configuration - only store active KV
-    gpu_memory_utilization=0.85,
-    max_num_seqs=16,
+    model="llama-405b",
     
     # CXL KV Cache configuration
-    enable_cxl_kv_cache=True,           # Enable CXL KV Cache
-    cxl_pool_size_gb=2048,              # CXL Pool capacity
-    cxl_kv_cache_ratio=0.8,             # 80% for KV Cache
-    
-    # Prefix sharing configuration
-    enable_prefix_caching=True,
-    shared_prefix_pool="cxl://pool/prefix",  # Cross-instance sharing
+    enable_cxl_backend=True,
+    cxl_switch_address="cxl://switch0/pool",
+    cxl_pool_size_gb=8192,
     
     # Tiering strategy
-    kv_cache_eviction_policy="lru-tiered",
-    hot_cache_threshold_ms=100,          # Access within 100ms considered hot
+    kv_cache_dtype="fp16",
+    kv_offload_policy="auto",  # GPU HBM -> CXL automatic tiering
+    
+    # Prefix sharing
+    enable_prefix_caching=True,
+    prefix_cache_location="cxl-shared",
 )
 ```
+
 
 ![](images/img_11.png)
 
