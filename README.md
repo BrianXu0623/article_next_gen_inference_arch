@@ -744,19 +744,19 @@ Serverless Computing architecture has a natural fit with CXL memory pooling:
 
 Currently, given that CXL 3.0 has not been fully deployed, mainstream inference engines do not yet natively support CXL, but academia has achieved substantial breakthroughs:
 
-1. TraCT (ASPLOS 2025) [10]
+**1. TraCT (ASPLOS 2025) [10]**
 * Rack-scale LLM serving system
 * Replaces RDMA-based KV transmission with GPU-CXL DMA
 * Implemented based on Dynamo-vLLM runtime
 * Evaluated on real CXL hardware (Niagara)
 
-2. Beluga (arXiv 2025.11) - Actually Modified vLLM [11]
+**2. Beluga (arXiv 2025.11) - Actually Modified vLLM [11]**
 * Developed by Alibaba team, integrated into vLLM inference engine
 * Built 8TB memory pool using XConn XC50256 CXL 2.0 commercial switch
 * Achieved 89.6% reduction in TTFT and 7.35x throughput improvement (compared to RDMA solutions)
 * Key innovation: Supports native CXL load/store access semantics for KV Cache, allowing GPUs and CPUs to directly access CXL shared memory
 
-Future Possible Support for vLLM/SGLang
+**Future Possible Support for vLLM/SGLang**
 
 Given that Beluga has proven feasibility, mainstream inference engines like vLLM and SGLang will likely provide native support as soon as the CXL hardware ecosystem matures.
 ```Python
