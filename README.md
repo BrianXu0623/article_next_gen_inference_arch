@@ -179,6 +179,8 @@ Uses `AsyncLLMEngine` and background event loop, combined with platform-side mul
 
 If different requests share the same or several system prompt prefixes, prefix caching should be enabled (enable_prefix_caching) to share system prompt context and further accelerate inference.
 
+#### 5.2.1 Migration Guide for Batch Operators
+![](images/img_12.png)
 ```python
 # Best Practice: Supports concurrent inference, automatic Batching
 import asyncio
@@ -244,6 +246,140 @@ def handler(event, context):
     result = future.result() 
     
     return parse_result(result)
+```
+
+#### 5.2.2 Migration Guide for Stream Operators
+
+![](images/img_13.png)
+
+```python
+# Async batch inference with model reuse
+import json
+import asyncio
+import threading
+import uuid
+from vllm.engine.async_llm_engine import AsyncLLMEngine
+from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm import SamplingParams
+
+class VLLMAsyncStreamOperator:
+    """Process video frames with async batching"""
+    
+    def __init__(self, ctx):
+        # Global async engine: load once, reuse across tasks
+        engine_args = AsyncEngineArgs(
+            model="/opt/model/path",
+            gpu_memory_utilization=0.95,
+            max_num_seqs=16,  # Allow batching up to 16 frames
+            enable_prefix_caching=True,
+            disable_log_requests=True
+        )
+        self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+        
+        # Background event loop for async execution
+        self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(
+            target=self._run_loop, 
+            args=(self.loop,), 
+            daemon=True
+        )
+        self.loop_thread.start()
+        
+        # Task-level state (reset on each start)
+        self.pending_requests = []  # Store (request_id, timestamp, future)
+        self.sampling_params = None
+    
+    def _run_loop(self, loop):
+        """Run event loop in background thread"""
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
+    
+    async def _generate_async(self, prompt, request_id, sampling_params):
+        """Async inference coroutine"""
+        results_generator = self.engine.generate(prompt, sampling_params, request_id)
+        final_output = None
+        async for request_output in results_generator:
+            final_output = request_output
+        return final_output
+    
+    def start(self, node_id: int, options: str) -> int:
+        # Reset state for new task
+        self.pending_requests = []
+        
+        # Parse options and create sampling params
+        opts = json.loads(options) if options else {}
+        self.sampling_params = SamplingParams(
+            temperature=opts.get("temperature", 0.7),
+            max_tokens=opts.get("max_tokens", 100),
+            top_p=opts.get("top_p", 0.9)
+        )
+        return 0
+    
+    def process(self, task) -> int:
+        # Submit all frames from decoder to async engine (non-blocking)
+        for stream_id in task.get_input_stream_ids():
+            while not task.InputStreamEmpty(stream_id):
+                pkt = task.PopPacket(stream_id)
+                
+                # Check for EOF
+                if pkt.timestamp() == 9223372036854775804:  # TIMESTAMP_EOF
+                    task.set_timestamp(9223372036854775807)  # TIMESTAMP_DONE
+                    return 0
+                
+                # Extract frame data
+                frame_data = pkt.data()
+                prompt = self._build_prompt(frame_data)
+                
+                # Submit inference request asynchronously (non-blocking)
+                request_id = str(uuid.uuid4())
+                future = asyncio.run_coroutine_threadsafe(
+                    self._generate_async(prompt, request_id, self.sampling_params),
+                    self.loop
+                )
+                
+                # Store request for later collection
+                self.pending_requests.append({
+                    "timestamp": pkt.timestamp(),
+                    "request_id": request_id,
+                    "future": future
+                })
+        
+        return 0
+    
+    def _build_prompt(self, frame_data):
+        # Build prompt from frame data
+        return "Describe this frame: ..."
+    
+    def close(self, node_id: int) -> tuple[int, str]:
+        # Wait for all pending requests to complete
+        caption_results = []
+        
+        for req in self.pending_requests:
+            try:
+                # Block and get result (vLLM batches these internally)
+                output = req["future"].result(timeout=30)
+                caption = output.outputs[0].text
+                
+                caption_results.append({
+                    "timestamp": req["timestamp"],
+                    "request_id": req["request_id"],
+                    "caption": caption
+                })
+            except Exception as e:
+                caption_results.append({
+                    "timestamp": req["timestamp"],
+                    "request_id": req["request_id"],
+                    "error": str(e)
+                })
+        
+        # Sort by timestamp
+        caption_results.sort(key=lambda x: x["timestamp"])
+        
+        result = json.dumps({
+            "captions": caption_results,
+            "count": len(caption_results)
+        })
+        return 0, result
 ```
 
 ### 5.3 Multi-GPU Inference Scenarios
