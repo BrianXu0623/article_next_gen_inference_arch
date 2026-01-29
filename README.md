@@ -750,6 +750,16 @@ Beluga is the first system to achieve GPU direct access to large-scale memory po
 <td>Product Maturity<br/></td><td>Mass produced<br/></td><td>Mass produced<br/></td><td>2026-2027<br/></td><td>2027+<br/></td></tr>
 </table>
 
+### 3.7 Comparison of CXL and RDMA for Memory Pooling in Inference
+
+Traditional RDMA-based memory pooling solutions face three core challenges: high access latency, complex communication protocols, and synchronization overhead. Specifically, RDMA treats memory as a network resource, requiring complex network protocol stacks, "bounce buffer" data copies through host memory, and cumbersome synchronization mechanisms to achieve memory pooling. These issues are particularly pronounced in LLM inference scenarios, as KVCache data is highly fragmented with numerous small-granularity, non-contiguous memory operations—precisely the scenarios where RDMA's scatter-gather mechanism struggles to handle efficiently.
+
+In contrast, CXL provides native load/store access semantics, enabling CPUs and GPUs to access shared memory pools with near-local memory latency. From a latency perspective, Beluga's RPC mechanism implemented over CXL shared memory achieves only 2.11 μs round-trip latency, compared to 8.39 μs for RDMA, representing approximately a 4× latency improvement. For data transfer operations, in the 16KB transfer scenario, CXL's median latency is only 10.2%-13.3% of RDMA's latency for small operations and 39.5%-56.2% for larger operations.
+
+This latency advantage brings fundamental simplification to architectural design. Traditional RDMA systems, due to the significant gap between local and remote memory access, must employ complex cache-aware scheduling strategies to maintain KVCache locality, leading to scheduling complexity and load imbalance issues. In contrast, Beluga, leveraging the near-uniform access latency of CXL memory pools, can achieve "cache-oblivious" scheduling, completely decoupling compute resource allocation from KVCache placement.
+
+The end-to-end evaluation demonstrates that Beluga-KVCache achieves significant performance improvements compared to RDMA-based solutions, with an 89.6% reduction in TTFT and a 7.35× improvement in throughput [11].
+
 ## 4. CXL Applications in AI Inference: Academic and Industry Frontiers
 
 ### 4.1 Academic Research Progress
