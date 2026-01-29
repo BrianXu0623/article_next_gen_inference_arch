@@ -180,7 +180,9 @@ Uses `AsyncLLMEngine` and background event loop, combined with platform-side mul
 If different requests share the same or several system prompt prefixes, prefix caching should be enabled (enable_prefix_caching) to share system prompt context and further accelerate inference.
 
 #### 5.2.1 Migration Guide for Batch Operators
+
 ![](images/img_12.png)
+
 ```python
 # Best Practice: Supports concurrent inference, automatic Batching
 import asyncio
@@ -891,6 +893,12 @@ Currently, given that CXL 3.0 has not been fully deployed, mainstream inference 
 * Built 8TB memory pool using XConn XC50256 CXL 2.0 commercial switch
 * Achieved 89.6% reduction in TTFT and 7.35x throughput improvement (compared to RDMA solutions)
 * Key innovation: Supports native CXL load/store access semantics for KV Cache, allowing GPUs and CPUs to directly access CXL shared memory
+
+**Beluga Experiment Hardware Architecture**
+
+![](images/img_14.png)
+![](images/img_15.png)
+![](images/img_16.png)
 
 **Future Possible Support for vLLM/SGLang**
 
