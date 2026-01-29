@@ -760,6 +760,12 @@ This latency advantage brings fundamental simplification to architectural design
 
 The end-to-end evaluation demonstrates that Beluga-KVCache achieves significant performance improvements compared to RDMA-based solutions, with an 89.6% reduction in TTFT and a 7.35× improvement in throughput [11].
 
+**Beluga Model Inference Experiment Hardware Architecture**
+
+![](images/img_14.png)
+![](images/img_15.png)
+![](images/img_16.png)
+
 ## 4. CXL Applications in AI Inference: Academic and Industry Frontiers
 
 ### 4.1 Academic Research Progress
@@ -903,12 +909,6 @@ Currently, given that CXL 3.0 has not been fully deployed, mainstream inference 
 * Built 8TB memory pool using XConn XC50256 CXL 2.0 commercial switch
 * Achieved 89.6% reduction in TTFT and 7.35x throughput improvement (compared to RDMA solutions)
 * Key innovation: Supports native CXL load/store access semantics for KV Cache, allowing GPUs and CPUs to directly access CXL shared memory
-
-**Beluga Experiment Hardware Architecture**
-
-![](images/img_14.png)
-![](images/img_15.png)
-![](images/img_16.png)
 
 **Future Possible Support for vLLM/SGLang**
 
