@@ -39,8 +39,8 @@ Traditional development patterns usually treat model inference as a synchronous 
 
 ### 2.1 Traditional Frameworks: PyTorch & TensorFlow
 
-- **Positioning**: General-purpose deep learning research and training frameworks.
-- **Limitations in Inference**: Default to Eager Mode (dynamic graph) execution, lacking memory optimization for LLM generation processes. If directly using `model.generate()`, typically only static batches can be processed (leading to memory fragmentation + tail blocking), making it difficult to handle dynamic scenarios with varying request lengths, and KV Cache memory consumption is huge, easily causing OOM.
+* **Positioning:** A general-purpose deep learning framework designed for research and training, not optimized for LLM online serving.
+* **Limitations in Inference:** By default, both frameworks operate in Eager Mode (without compilation), where each operator is triggered independently without a global view of the computation graph, making it difficult to apply cross-layer optimizations such as operator fusion. The more fundamental issue lies in memory management. When using `model.generate()` directly, the framework must pre-allocate a contiguous block of GPU memory for each request's KV Cache, sized according to the maximum possible generation length. This leads to two compounding problems: first, when a request's actual output is far shorter than the reserved length, the unused memory cannot be reclaimed by other requests, resulting in severe **internal fragmentation**; second, all requests in a batch must start and finish together as a static unit — shorter requests are forced to idle until the longest request in the batch completes, causing **head-of-line blocking** and **low GPU utilization**. Together, these issues drive up KV Cache memory consumption, reduce throughput, and make OOM failures likely under high-concurrency workloads.
 
 ### 2.2 Specialized Inference Frameworks: vLLM & SGLang
 
