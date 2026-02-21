@@ -104,6 +104,10 @@ From this, we can understand that compared to traditional inference frameworks, 
 > **One-sentence explanation of what is operator handler Runtime mode?**
 > As mentioned above, after enabling exclusive reuse, the operator runs the operator Handler through thread or fork process during runtime, where thread mode allows creating and modifying global Python modules within the handler. The process method can only load global modules through Copy On Write within the handler and cannot modify global modules.
 
+**Why Not Simply Use a Stateful Long-running Server?**
+
+The core advantage of Serverless Inference over traditional long-running services lies in **elasticity and resource efficiency**. Long-running services must pre-provision resources for peak traffic, meaning GPUs sit idle during off-peak hours while costs continue to accrue. Serverless, by contrast, can scale containers down to zero when there are no incoming requests and horizontally scale out a large number of containers for parallel processing during traffic spikes, resulting in significantly higher resource utilization. Furthermore, video frame inference is inherently stateless — there is no context dependency between frames, and each container can exit after processing its assigned batch of frames without needing to maintain KV Cache or session state across requests. Forcing a long-running server into this model only introduces unnecessary state management complexity. The container-level fault isolation of Serverless also ensures that a single container failure does not impact the overall workflow. Combined with the operator exclusive reuse mechanism, Serverless Computing achieves an inference architecture that balances **elastic scaling, resource isolation, and multi-tenant scheduling**, rather than concentrating all complexity within a single long-running process.
+
 **The following is an example of an operator with resource exclusive reuse enabled using thread Handler Runtime mode**
 
 ![](images/img_1.png)
