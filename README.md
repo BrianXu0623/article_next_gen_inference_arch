@@ -256,6 +256,8 @@ def handler(event, context):
 
 #### 5.2.2 Migration Guide for Stream Operators
 
+Stream operators no longer need task-level concurrency for acceleration — By the nature of stream operator, concurrent inference can be achieved within a single operator task (explained below).
+
 ![](images/img_13.png)
 
 ```python
