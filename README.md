@@ -25,15 +25,7 @@ However, when developing and deploying large model inference operators on the Se
 
 Traditional development patterns usually treat model inference as a synchronous function call. However, GPUs are highly parallelized hardware, and LMM inference has alternating characteristics of "compute-intensive" and "memory-intensive." If each Handler instance can only process one request serially, GPU computing power is largely wasted during I/O waiting or generation gaps, and it cannot handle burst traffic.
 
-**This article is divided into two parts**
-
-1. **The first part aims to introduce**
-
-   1. How to leverage the platform's **operator resource exclusive reuse** and **single-task multi-concurrency** features, combined with industry-leading inference engines (vLLM / SGLang), to achieve **optimal batch processing within a single instance**, thereby maximizing GPU utilization and reducing inference latency.
-   2. Development guidelines for distributed multi-GPU inference scenarios
-2. **The second part aims to introduce**
-
-   1. Next-generation Serverless Computing inference architecture design based on CXL
+**This chapter aims to introduce** how to leverage the serverless computing platform's **operator resource exclusive reuse** and **single-task multi-concurrency** features, **combined with industry-leading inference engines (vLLM / SGLang), to achieve optimal batch processing within a single instance**, thereby maximizing GPU utilization and reducing inference latency, as well as a development guide for distributed multi-GPU inference scenarios.
 
 ## 2. Core Component Introduction
 
