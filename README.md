@@ -145,11 +145,11 @@ In high-concurrency scenarios, if vLLM still independently calculates and stores
   - **Write-Once-Read-Many**: The common prefix's KV Cache only needs to be computed once (Prefill) when the first request arrives, and all subsequent concurrent requests will directly reference that physical memory block through pointers, **skipping the computation process**.
 - **Benefits**:
 
-  1. **Reduces Prefill time and Time To First Token (TTFT) for subsequent requests**
-  2. **Improves memory utilization**
+  - **Reduces Prefill time and Time To First Token (TTFT) for subsequent requests**
+  - **Improves memory utilization**
 - **Supplement:**
 
-  1. SGLang's **RadixAttention** takes this sharing to the extreme. In SGLang, this tree-like reuse is native and more deeply optimized.
+  - SGLang's **RadixAttention** takes this sharing to the extreme. In SGLang, this tree-like reuse is native and more deeply optimized.
 
 ## 5. Code Migration Guide
 
