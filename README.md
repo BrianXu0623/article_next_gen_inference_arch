@@ -696,7 +696,7 @@ This practice validated the feasibility of CXL memory pooling in data-intensive 
 - Memory Sharing enables multiple inference instances to share a single copy of System Prompt KV Cache, eliminating redundant storage
 - Multi-level Fabric supports cluster-scale memory pools, breaking through single-rack limitations
 
-**Limitation**: Products are still maturing, expected to enter large-scale deployment in 2025-2026.
+**Limitation**: Products are still maturing, expected to enter large-scale deployment in 2026.
 
 ### 3.4 CXL 4.0 (2025)
 
