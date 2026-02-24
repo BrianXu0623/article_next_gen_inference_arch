@@ -474,8 +474,9 @@ def get_engine():
 
 ## 6. Operator Single-Task Multi-Concurrency
 
-1. **Platform Feature:** The platform supports concurrent invocation of operator Handlers, exposed to users through configuration
-   **Note:** This configuration is strongly related to VLLM's `max_num_seqs` setting and can be understood as a soft rate limit. If operator concurrency is less than `max_num_seqs`, it will synchronously limit `max_num_seqs`.
+**Platform Feature:** The platform supports concurrent invocation of operator Handlers, exposed to users through configuration
+
+**Note:** This configuration is strongly related to VLLM's `max_num_seqs` setting and can be understood as a soft rate limit. If operator concurrency is less than `max_num_seqs`, it will synchronously limit `max_num_seqs`.
    During the initial phase of developers using the operator concurrent invocation feature to develop operators, before finding the optimal configuration for operator concurrency and `max_num_seqs`, a series of experiments are usually needed. These two configurations directly affect GPU memory and CUDA core utilization, as well as inference end-to-end latency and throughput. Developers should flexibly configure based on different inference scenarios and resources.
 
 **Below is a configuration example.** Assume a user wants to develop a GPU operator using a 500GB parameter model for VLLM inference, with each inference requiring an average of 100GB KV Cache. The user can configure eight H20 GPUs for the operator (totaling 800GB memory), with 500GB as static model parameter memory loaded globally, 300GB as KV Cache memory, and concurrency = 300GB / 100GB = 3.
@@ -585,11 +586,11 @@ In 2026, we are witnessing another leap in large model parameter scales:
 <td>Next Generation<br/></td><td>TBD<br/></td><td>TBD<br/></td><td>TBD<br/></td></tr>
 </table>
 
-Taking Llama 4 Maverick as an example, model weights alone require 800GB of memory. Even using 8 H100 GPUs (totaling 640GB HBM), aggressive quantization strategies are needed to barely fit the model, with almost no space for KV Cache.
+As large language models continue to iterate and evolve, model parameter counts are growing rapidly to store more knowledge and content. Taking Llama 4 Maverick as an example, model weights alone require 800GB of memory. Even using 8 H100 GPUs (totaling 640GB HBM), aggressive quantization strategies are needed to barely fit the model, with almost no space for KV Cache.
 
 ### 1.2 HBM Supply-Demand Dilemma
 
-HBM (High Bandwidth Memory) is the mainstream memory solution for current AI accelerators, but its limited supply and high cost are becoming major bottlenecks for AI inference scaling.
+HBM (High Bandwidth Memory) is the high-performance memory solution adopted by mainstream AI accelerators (such as NVIDIA H100/H200 and AMD MI300X), and has become a core component of AI training and inference thanks to its extremely high memory bandwidth. However, HBM's manufacturing process is exceptionally complex (requiring multiple DRAM dies to be vertically stacked via TSV), with very few global suppliers, leading to persistent supply shortages and high costs that are becoming a major bottleneck for AI inference scaling.
 
 **Cost Comparison [9]**:
 
@@ -597,24 +598,32 @@ HBM (High Bandwidth Memory) is the mainstream memory solution for current AI acc
 <tr>
 <td>**Memory Type**<br/></td><td>**Bandwidth**<br/></td><td>**Cost per GB**<br/></td><td>**Capacity Limit**<br/></td></tr>
 <tr>
-<td>HBM3E<br/></td><td>4.8TB/s<br/></td><td>$50-100<br/></td><td>Limited by packaging<br/></td></tr>
+<td>HBM3E<br/></td><td>~1.2 TB/s per stack (H200 full card ~4.8 TB/s)<br/></td><td>$50-100<br/></td><td>Limited by packaging<br/></td></tr>
 <tr>
-<td>DDR5-6400<br/></td><td>51.2GB/s/channel<br/></td><td>$3-5<br/></td><td>Server slot limitation<br/></td></tr>
+<td>Local DDR5-6400<br/></td><td>~51 GB/s per channel, ~410 GB/s with 8-channel server<br/></td><td>$3-5<br/></td><td>Limited by motherboard slots<br/></td></tr>
 <tr>
-<td>CXL 2.0/3.0 DDR5<br/></td><td>64-128GB/s (x16)<br/></td><td>$5-15<br/></td><td>100TB+/cluster<br/></td></tr>
+<td>CXL DDR5 (external)<br/></td><td>~64 GB/s per x16 link (x16)<br/></td><td>$5-10<br/></td><td>100TB+/cluster (horizontally scalable)<br/></td></tr>
 </table>
 
-CXL memory costs approximately 1/10 of HBM, and capacity can scale to cluster level. For scenarios like KV Cache that are capacity-sensitive but have relatively lower bandwidth requirements, CXL provides a viable expansion path.
+HBM memory is both scarce and expensive — HBM3E costs approximately 10x more per GB than DDR5. In the era of ever-larger models, relying solely on HBM for memory capacity expansion is prohibitively expensive. As a result, leveraging low-cost DDR5 to build large-capacity memory pools as a capacity extension for HBM has become an active area of research. In this tiered storage architecture, HBM serves as a fast cache by virtue of its high bandwidth, caching hot KV Cache data, while the DDR5 memory pool provides large-capacity storage at low cost, horizontally scalable via CXL and mountable to compute nodes on demand.
+
+The CXL DDR5 external pooled memory solution costs approximately 1/10 that of HBM, with capacity scalable to cluster level. For capacity-sensitive, bandwidth-tolerant workloads such as KV Cache storage, CXL provides a viable expansion path.
+
+The storage medium of the memory pool is not limited to DDR — SSDs and other media can also be used. To enable Host interaction with the memory pool, the mainstream industry approaches are RDMA or CXL. Taking CXL + DDR5 as an example, the cost per GB can be compressed to 1/10 to 1/20 of HBM, and by aggregating bandwidth through a CXL Switch, the bandwidth gap compared to HBM is approximately 10x.
+
+However, in large-scale LLM inference scenarios, the practical impact of this bandwidth gap is significantly reduced: LLM inference is a typical memory-capacity-bound workload, where the bottleneck lies not in bandwidth but in how much KV Cache can be accommodated. The CXL memory pool substantially expands available memory capacity, enabling the AsyncLLMEngine to support larger batch sizes and higher request concurrency, thereby significantly improving GPU utilization and overall throughput. For latency-tolerant inference scenarios, this architecture can substantially reduce Total Cost of Ownership (TCO) while maintaining acceptable throughput.
 
 ## 2. CXL Technology Overview
 
 ### 2.1 What is CXL?
 
-Compute Express Link (CXL) is an open interconnect standard built on the PCIe physical layer, providing Cache Coherency and Memory Semantics access capabilities between CPUs and devices.
+Compute Express Link (CXL) is an open interconnect standard built on top of the PCIe physical layer (reusing PCIe 5.0 physical cables and connectors), providing cache coherency and memory semantics access capabilities between CPUs and devices. Through CXL Switches, multiple Host CPUs can be connected to external shared memory pools. It provides load/store semantics, allowing CPUs to read and write CXL memory directly as if it were local memory, supporting cache line granularity access with no additional memory copies required.
 
-The CXL Consortium was founded in 2019, with founding members including Alibaba, Meta, Google, Intel, Microsoft, and others [1].
+The CXL Consortium was founded in 2019, with founding members including Alibaba, Meta, Google, Intel, and Microsoft [1].
 
 ![](images/img_7.png)
+
+The figure above compares RDMA and CXL. Although RDMA bypasses the kernel (zero copy refers to the absence of kernel-space copies), data still needs to be transferred from source memory to destination memory via NIC DMA; the sender must poll the Completion Queue to confirm operation completion; and it does not provide hardware-level cache coherence, requiring the application layer to maintain consistency independently. CXL goes a step further: the CPU accesses remote memory directly via load/store instructions, without going through a NIC, with no explicit data movement required at the software layer, hardware-guaranteed cache coherence, and complete transparency to the application layer.
 
 ### 2.2 Three Sub-protocols of CXL
 
@@ -639,27 +648,27 @@ The CXL Consortium was founded in 2019, with founding members including Alibaba,
 
 ### 3.1 CXL 1.0/1.1 (2019)
 
-**Problems Solved**: Before CXL, CPU access to accelerator (such as GPU, FPGA) memory required PCIe DMA, with high software overhead and latency. Accelerator access to host memory also required explicit data copying, unable to achieve cache coherency.
+**Problems Solved**: Prior to CXL, CPUs and accelerators (such as GPUs and FPGAs) communicated via bare PCIe, which — while technically capable of direct read/write — lacked hardware-level cache coherence, had address space limited by BAR constraints, suffered from high latency, and required software-layer consistency management, resulting in high development complexity.
 
 - Based on PCIe 5.0 physical layer, 32GT/s
 - Defined three sub-protocols and three device types
-- CPU and devices can directly access each other's memory through Load/Store instructions, with hardware automatically maintaining cache coherency
+- CPUs and devices can directly access each other's memory via load/store instructions, with hardware automatically maintaining cache coherence
 
-**Limitation**: Only supports point-to-point connections, cannot achieve multi-host shared memory.
+**Positioning**: Supports only point-to-point connections with no multi-host memory sharing. Focused on solving coherence and performance issues for point-to-point interconnects between a single Host and a single device, laying the foundation for future multi-device and multi-Host expansion.
 
 ### 3.2 CXL 2.0 (2020)
 
-**Problems Solved**: CXL 1.x only supports point-to-point connections, with each server's memory independent. When some nodes have insufficient memory, they cannot borrow idle memory from other nodes, resulting in low resource utilization.
+**Problems Solved**: CXL 1.x supported only point-to-point connections, with each server's memory isolated from others. When certain nodes ran low on memory, they could not borrow idle memory from other nodes, resulting in low resource utilization.
 
 **Core Features**:
 
-- Introduced **CXL Switch**, supporting multiple hosts connecting to the same memory pool
-- Supports **Memory Pooling**: Memory resources can be allocated on-demand among multiple hosts
+- Introduced **CXL Switch**, enabling multiple Hosts to connect to the same CXL Switch and share the same memory pool; a single Host is no longer constrained by PCIe port count and can connect to more CXL memory devices through the Switch
+- Supports **Memory Pooling**: memory resources can be allocated on demand across multiple hosts
 - Supports virtualization of a single physical device into multiple logical devices (MLD)
 
 **Industry Practice: Alibaba Cloud PolarDB** (SIGMOD 2025 Best Paper)
 
-Alibaba Cloud built the PolarCXLMem distributed memory pool based on CXL 2.0 [3]:
+CXL 2.0 began attracting widespread attention in both industry and academia. Alibaba Cloud built PolarCXLMem, a distributed memory pool based on CXL 2.0 [3]:
 
 - Multiple compute nodes connect to a shared memory pool through CXL Switch
 - Compared to RDMA solution, cross-machine latency reduced from microsecond level to hundreds of nanoseconds
@@ -667,25 +676,25 @@ Alibaba Cloud built the PolarCXLMem distributed memory pool based on CXL 2.0 [3]
 
 This practice validated the feasibility of CXL memory pooling in data-intensive scenarios [3]. The KV Cache access pattern in AI inference has similarities with database Buffer Pool, offering reference value.
 
-**Limitation**: Memory Pooling is exclusive allocation; once a memory region is allocated to a host, other hosts cannot access it. Multiple inference instances cannot share the same System Prompt KV Cache.
+**Limitation**: Although multiple Hosts can access the same memory pool through a CXL Switch, they cannot simultaneously map the same physical address range with hardware-level cache coherence guarantees. In AI inference scenarios, this means: read-only model weights can be shared across multiple Hosts; however, dynamically written KV Cache still requires software-layer consistency maintenance, introducing additional development complexity and latency. Hardware-level multi-Host shared memory is not supported until CXL 3.0 introduces the Fabric topology.
 
 ### 3.3 CXL 3.0/3.1 (2022-2023)
 
-**Problems Solved**: CXL 2.0's Memory Pooling is exclusive mode, unable to support multiple hosts accessing the same memory region simultaneously. Also, single-level Switch limits networking scale.
+**Problems Solved**: While CXL 2.0 allows multiple Hosts to access the same memory pool through a Switch, memory is statically partitioned and exclusively allocated to individual Hosts, with no support for multiple Hosts simultaneously mapping the same physical address range with hardware-level cache coherence — true cross-Host sharing still requires software maintenance. Furthermore, CXL 2.0 supports only single-level Switches, limiting network scale and topology flexibility. CXL 3.0 introduces multi-level Fabric topology and hardware-level multi-Host memory sharing (Global Fabric Attached Memory), addressing both of these issues.
 
 **Core Features**:
 
 - Upgraded to PCIe 6.0, **64GT/s** (bandwidth doubled)
-- Supports **Fabric Topology**: Multi-level switching, ring, mesh and other non-tree structures
+- Supports **Fabric Topology**: multi-level switching, ring, mesh, and other non-tree structures, supporting up to 4096 node interconnects
 - Supports **Memory Sharing**: Multiple hosts can read and write the same memory region simultaneously
-- Supports up to 4096 node interconnection
 - Standardized Peer-to-Peer (P2P) access mechanism between devices, allowing devices such as GPU (Type 2) ↔ memory module (Type 3) to directly perform read/write interactions without routing data path and coherency control through the host CPU (CPU Bypass).
 
 **Significance for AI Inference**:
 
-1. Doubled bandwidth combined with P2P access mechanism enables CXL memory to handle higher frequency KV Cache read/write
-2. Memory Sharing supports multiple inference instances sharing the same System Prompt KV Cache, avoiding redundant storage
-3. Multi-level Fabric supports cluster-level memory pools, breaking single-rack limitations
+- Doubled PCIe 6.0 bandwidth enables CXL memory to handle higher-frequency KV Cache read/write workloads
+-   P2P access allows GPUs to read and write the CXL memory pool directly, reducing CPU involvement overhead
+- Memory Sharing enables multiple inference instances to share a single copy of System Prompt KV Cache, eliminating redundant storage
+- Multi-level Fabric supports cluster-scale memory pools, breaking through single-rack limitations
 
 **Limitation**: Products are still maturing, expected to enter large-scale deployment in 2025-2026.
 
@@ -703,13 +712,13 @@ This practice validated the feasibility of CXL memory pooling in data-intensive 
 
 ### 3.5 GPU Direct CXL Memory Access: Data Path Bypassing CPU
 
-**Problems Solved:** In traditional CXL architecture, GPU access to CXL memory must go through CPU Root Complex, causing extra bounce buffer copying and bandwidth bottleneck (measured GPU write bandwidth limited to ~26GB/s, far below theoretical value).
+**Problems Solved:** In traditional CXL architectures, GPU transactions accessing CXL memory must be routed through the CPU Root Complex, making CPU-side bandwidth the bottleneck — measured GPU write bandwidth falls far below the theoretical limit (approximately ~26 GB/s).
 
 **Core Features:**
 
-- CXL 3.0 supports P2P Direct Memory Access, Type 2 devices (GPU) can directly access Type 3 devices (CXL memory)
-- Through CUDA Host Memory Registration, CXL memory regions are marked as page-locked memory, achieving GPU-CXL zero-copy DMA
-- Data path reduced from 16 hops (through CPU) to 8 hops (direct), latency reduced by 2-5ns
+- CXL 3.0 supports P2P Direct Memory Access, allowing Type 2 devices (GPUs) to directly address Type 3 devices (CXL memory) via the CXL Fabric, without routing data through the Host CPU
+- Eliminates the CPU Root Complex bandwidth bottleneck, enabling GPU read/write bandwidth to CXL memory to approach the theoretical link limit
+- Combined with CUDA's Unified Memory or GPUDirect mechanisms, zero-copy DMA between GPU and CXL memory can be achieved
 
 **Academic Practice: Beluga (arXiv 2025)**
 
@@ -856,10 +865,10 @@ The next-generation inference architecture for Serverless Computing based on CXL
 
 **Data Flow Strategy**:
 
-1. New request KV Cache is first generated in GPU HBM
-2. When HBM pressure increases, cold KV Cache is asynchronously migrated to CXL Pool
-3. System Prompt KV shared by multiple requests is directly maintained in CXL Pool
-4. Rarely accessed historical data is demoted to Host DRAM or NVMe
+- New request KV Cache is first generated in GPU HBM
+- When HBM pressure increases, cold KV Cache is asynchronously migrated to CXL Pool
+- System Prompt KV shared by multiple requests is directly maintained in CXL Pool
+- Rarely accessed historical data is demoted to Host DRAM or NVMe
 
 ### 5.3 Hot/Cold Data Dynamic Management Solution (Page Placement & Tier Promotion/Demotion):
 
@@ -960,10 +969,10 @@ Based on existing CXL practice data and research results in the industry, introd
 
 ### 6.1 Core Viewpoints
 
-1. **Memory is the Next Bottleneck**: As model scale and context length grow, HBM capacity and cost will become the main constraints for AI inference
-2. **CXL is a Pragmatic Solution**: CXL provides near-local memory access performance at 1/10-1/20 the cost, with production-level practices like Alibaba Cloud PolarDB already validated
-3. **2026-2027 is the Critical Window**: CXL 3.0 products are about to mature, platforms that position early will gain significant competitive advantages
-4. **Serverless Computing is Naturally Suited for CXL**: Serverless architecture is highly aligned with the concept of memory pooling, with relatively low implementation costs
+- **Memory is the Next Bottleneck**: As model scale and context length grow, HBM capacity and cost will become the main constraints for AI inference
+- **CXL is a Pragmatic Solution**: CXL provides near-local memory access performance at 1/10-1/20 the cost, with production-level practices like Alibaba Cloud PolarDB already validated
+- **2026-2027 is the Critical Window**: CXL 3.0 products are about to mature, platforms that position early will gain significant competitive advantages
+- **Serverless Computing is Naturally Suited for CXL**: Serverless architecture is highly aligned with the concept of memory pooling, with relatively low implementation costs
 
 # References
 
