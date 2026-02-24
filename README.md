@@ -110,12 +110,12 @@ In summary, after enabling the platform's operator resource exclusive reuse capa
 
 **The above is the first step of optimization. Below we continue to explain how to further improve GPU utilization and inference latency using the previously mentioned VLLM features.**
 
-**Before the platform supported operator single-task multi-concurrency**, users typically designed operators this way:
+**Develop an ordinary serverless inference operator**, users typically designed in this way:
 
-> - Handler initializes a `vllm.LLM` object.
+> - Initializes a `vllm.LLM` object within global modules.
 > - Request arrives -> `llm.generate(prompt)` -> **blocking wait** -> return result.
-> - **Consequence**: Even if the platform allows this instance to process 5 requests simultaneously, since `llm.generate` is synchronously blocking, these 5 requests can only **execute serially in queue**.
-> - **Resource Waste**: Each request exclusively occupies the entire 7B/70B model's memory, but the compute units are idle most of the time.
+> - **Consequence**: Operator instance processes one request each time, since `llm.generate` is synchronously blocking until inference finishes, each requests can only **execute serially in queue**.
+> - **Resource Waste**: Each request exclusively occupies the entire 7B/70B model's memory, but the compute units are idle most of the time, — failing to leverage vLLM's Continuous Batching and Iteration-Level Scheduling capabilities.
 
 ### 4.1 Best Practice: Concurrent Inference with Shared Model Memory
 
