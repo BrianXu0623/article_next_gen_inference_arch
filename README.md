@@ -720,22 +720,6 @@ This practice validated the feasibility of CXL memory pooling in data-intensive 
 - Eliminates the CPU Root Complex bandwidth bottleneck, enabling GPU read/write bandwidth to CXL memory to approach the theoretical link limit
 - Combined with CUDA's Unified Memory or GPUDirect mechanisms, zero-copy DMA between GPU and CXL memory can be achieved
 
-**Academic Practice: Beluga (arXiv 2025)**
-
-Beluga is the first system to achieve GPU direct access to large-scale memory pools through CXL Switch [11]:
-
-- Based on XConn XC50256 CXL 2.0 Switch, 8TB memory pool
-- Compared to RDMA solution (MoonCake): TTFT reduced 89.6%, throughput improved 7.35× [11]
-- Sparse KV Cache access latency reduced 95.9%
-
-**Significance for Ultra-Large Model Inference:**
-
-1. KV Cache fragmented access naturally suits load/store semantics
-2. Multiple inference instances can share the same Prefix Cache / memory parameters without redundant storage
-3. After eliminating CPU bottleneck, CXL memory bandwidth can be fully utilized
-
-**Limitation:** CXL 3.0 P2P products are still maturing. Currently Beluga and other systems achieve partial direct connection capability based on CXL 2.0 + software optimization. Complete hardware-level P2P support is expected in 2026-2027.
-
 ![](images/img_8.png)
 
 ### 3.6 Version Comparison
@@ -760,6 +744,16 @@ Beluga is the first system to achieve GPU direct access to large-scale memory po
 ### 3.7 Comparison of CXL and RDMA for Memory Pooling in Inference
 
 Traditional RDMA-based memory pooling solutions face three core challenges: high access latency, complex communication protocols, and synchronization overhead. Specifically, RDMA treats memory as a network resource, requiring complex network protocol stacks, "bounce buffer" data copies through host memory, and cumbersome synchronization mechanisms to achieve memory pooling. These issues are particularly pronounced in LLM inference scenarios, as KVCache data is highly fragmented with numerous small-granularity, non-contiguous memory operations—precisely the scenarios where RDMA's scatter-gather mechanism struggles to handle efficiently.
+
+**Academic Practice: Beluga (arXiv 2025)**
+
+Beluga is a CXL memory architecture proposed by Alibaba Cloud, specifically designed for LLM inference scenarios. It builds a large-scale shared memory pool accessible by both GPUs and CPUs via CXL Switch, and integrates Beluga-KVCache into the vLLM inference engine for managing large-scale KV Cache. Beluga is also the first work to systematically identify the CPU Root Complex as the bandwidth bottleneck for GPU access to CXL memory [11].
+
+**Significance for Ultra-Large Model Inference:**
+
+-  KV Cache fragmented access naturally suits load/store semantics
+-  Multiple inference instances can share the same Prefix KV Cache / model parameters without redundant storage
+-  After eliminating the CPU bottleneck, CXL memory bandwidth can be fully utilized (to be supported in CXL 3.0)
 
 In contrast, CXL provides native load/store access semantics, enabling CPUs and GPUs to access shared memory pools with near-local memory latency. From a latency perspective, Beluga's RPC mechanism implemented over CXL shared memory achieves only 2.11 μs round-trip latency, compared to 8.39 μs for RDMA, representing approximately a 4× latency improvement. For data transfer operations, in the 16KB transfer scenario, CXL's median latency is only 10.2%-13.3% of RDMA's latency for small operations and 39.5%-56.2% for larger operations.
 
