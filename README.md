@@ -128,9 +128,9 @@ To fully leverage vLLM's above features, **the platform's operator single-task m
 
 **Architecture Change:** No longer "one request exclusively occupies one model," but **"multiple request threads share the same asynchronous inference engine"**.
 
-1. **Single Instance Multi-threading**: Platform-side configuration allows a single operator instance to simultaneously launch multiple Handler threads, concurrently processing multiple inference requests.
-2. **Shared Engine**: All threads submit tasks to the same global singleton `AsyncLLMEngine`.
-3. **Automatic Batching**: vLLM automatically merges the Prompts submitted by these N threads for computation, achieving extremely high throughput.
+- **Single Instance Multi-threading**: Platform-side configuration allows a single operator instance to simultaneously launch multiple Handler threads, concurrently processing multiple inference requests.
+- **Shared Engine**: All threads submit tasks to the same global singleton `AsyncLLMEngine`.
+- **Automatic Batching**: vLLM automatically merges the Prompts submitted by these N threads for computation, achieving extremely high throughput.
 
 ### 4.2 Shared Context Optimization Based on APC
 
