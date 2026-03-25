@@ -265,27 +265,33 @@ from vllm import SamplingParams
 class VLLMAsyncStreamOperator:
     """Process video frames with async batching"""
     
+    # Class-level resources: loaded once, reused across tasks
+    _engine = None
+    _loop = None
+    _loop_thread = None
+    
     def __init__(self, ctx):
         # Global async engine: load once, reuse across tasks
-        engine_args = AsyncEngineArgs(
-            model="/opt/model/path",
-            gpu_memory_utilization=0.95,
-            max_num_seqs=16,  # Allow batching up to 16 frames
-            enable_prefix_caching=True,
-            disable_log_requests=True
-        )
-        self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+        if VLLMAsyncStreamOperator._engine is None:
+            engine_args = AsyncEngineArgs(
+                model="/opt/model/path",
+                gpu_memory_utilization=0.95,
+                max_num_seqs=16,  # Allow batching up to 16 frames
+                enable_prefix_caching=True,
+                disable_log_requests=True
+            )
+            VLLMAsyncStreamOperator._engine = AsyncLLMEngine.from_engine_args(engine_args)
+            
+            # Background event loop for async execution
+            VLLMAsyncStreamOperator._loop = asyncio.new_event_loop()
+            VLLMAsyncStreamOperator._loop_thread = threading.Thread(
+                target=self._run_loop, 
+                args=(VLLMAsyncStreamOperator._loop,), 
+                daemon=True
+            )
+            VLLMAsyncStreamOperator._loop_thread.start()
         
-        # Background event loop for async execution
-        self.loop = asyncio.new_event_loop()
-        self.loop_thread = threading.Thread(
-            target=self._run_loop, 
-            args=(self.loop,), 
-            daemon=True
-        )
-        self.loop_thread.start()
-        
-        # Task-level state (reset on each start)
+        # Task-level state (fresh on each task, no manual reset needed)
         self.pending_requests = []  # Store (request_id, timestamp, future)
         self.sampling_params = None
     
@@ -296,16 +302,13 @@ class VLLMAsyncStreamOperator:
     
     async def _generate_async(self, prompt, request_id, sampling_params):
         """Async inference coroutine"""
-        results_generator = self.engine.generate(prompt, sampling_params, request_id)
+        results_generator = self._engine.generate(prompt, sampling_params, request_id)
         final_output = None
         async for request_output in results_generator:
             final_output = request_output
         return final_output
     
-    def start(self, node_id: int, options: str) -> int:
-        # Reset state for new task
-        self.pending_requests = []
-        
+    def Start(self, node_id: int, options: str) -> int:
         # Parse options and create sampling params
         opts = json.loads(options) if options else {}
         self.sampling_params = SamplingParams(
@@ -315,7 +318,7 @@ class VLLMAsyncStreamOperator:
         )
         return 0
     
-    def process(self, task) -> int:
+    def Process(self, task) -> int:
         # Submit all frames from decoder to async engine (non-blocking)
         for stream_id in task.get_input_stream_ids():
             while not task.InputStreamEmpty(stream_id):
@@ -334,7 +337,7 @@ class VLLMAsyncStreamOperator:
                 request_id = str(uuid.uuid4())
                 future = asyncio.run_coroutine_threadsafe(
                     self._generate_async(prompt, request_id, self.sampling_params),
-                    self.loop
+                    self._loop
                 )
                 
                 # Store request for later collection
@@ -350,7 +353,7 @@ class VLLMAsyncStreamOperator:
         # Build prompt from frame data
         return "Describe this frame: ..."
     
-    def close(self, node_id: int) -> tuple[int, str]:
+    def End(self, node_id: int) -> tuple[int, str]:
         # Wait for all pending requests to complete
         caption_results = []
         
